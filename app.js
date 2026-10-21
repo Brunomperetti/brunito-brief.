@@ -42,7 +42,8 @@ const steps = [
     {id:'excluded_locations',label:'¿Hay zonas, tipos de clientes o condiciones que deberíamos excluir?',kind:'text',wide:true,placeholder:'Solo si aplica. Ej.: no enviamos fuera de Córdoba.'}
   ]},
   {id:'resultados',nav:'Objetivos e inversión',kicker:'04 / DEFINIR EL ÉXITO',title:'Qué vamos a conseguir.',desc:'Un buen objetivo no es “tener clics”: es generar resultados útiles para el negocio.',questions:[
-    {id:'primary_goal',label:'¿Cuál es el objetivo comercial más importante?',kind:'radio',required:true,wide:true,options:['Más consultas por WhatsApp o mensajes','Más ventas online','Más presupuestos / formularios','Más reservas o turnos','Más llamadas','Más visitas al local','Dar a conocer mi marca'],hint:'Elegí solo uno. El resto podrá trabajarse como objetivo secundario.'},
+    {id:'primary_goal',label:'¿Qué objetivos comerciales querés conseguir?',kind:'checkbox',required:true,wide:true,maxSelections:2,options:['Más consultas por WhatsApp o mensajes','Más ventas online','Más presupuestos / formularios','Más reservas o turnos','Más llamadas','Más visitas al local','Dar a conocer mi marca'],hint:'Podés elegir uno o dos. Si elegís dos, indicá cuál es tu prioridad.'},
+    {id:'goal_priority',label:'¿Cuál de esos dos objetivos es tu prioridad principal?',kind:'select',required:true,wide:true,when:()=>checkedValues('primary_goal').length===2,options:()=>checkedValues('primary_goal'),hint:'Así podemos priorizar la campaña sin perder de vista el segundo objetivo.'},
     {id:'monthly_target',label:'¿Qué resultado mensual te gustaría alcanzar?',kind:'text',wide:true,placeholder:'Ej.: 60 consultas calificadas, 25 ventas, 15 turnos. Si no sabés, dejalo vacío.'},
     {id:'current_baseline',label:'¿Cuántas consultas o ventas recibís hoy aproximadamente?',kind:'text',wide:true,placeholder:'Ej.: 30 consultas y 8 ventas por mes; o “no lo medimos”'},
     {id:'monthly_budget',label:'¿Qué presupuesto mensual podés destinar a los anuncios?',kind:'text',required:true,placeholder:'Ej.: $180.000 ARS / USD 250',hint:'Solo inversión publicitaria; no incluye honorarios de gestión.'},
@@ -89,6 +90,8 @@ const escapeHTML = value => String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp
 const active = q => typeof q.when !== 'function' || q.when();
 const currentQuestions = index => steps[index].questions.filter(active).filter(q=>q.kind!=='section');
 const checkedValues = key => Array.isArray(answers[key]) ? answers[key] : [];
+// Conserva la selección guardada en borradores creados antes de esta actualización.
+if(typeof answers.primary_goal==='string')answers.primary_goal=answers.primary_goal.trim()?[answers.primary_goal]:[];
 const populated = v => Array.isArray(v) ? v.length>0 : typeof v==='string' ? v.trim().length>0 : !!v;
 const normalize = value => String(value||'cliente').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,55);
 const saveDraft = () => { try{localStorage.setItem(STORAGE_KEY,JSON.stringify(answers));return true}catch(_e){return false} };
@@ -101,7 +104,7 @@ function fieldMarkup(q){
   const opt = q.required ? ' <span class="req" aria-label="obligatorio">*</span>' : '<span class="optional">Opcional</span>';
   let input='';
   if(q.kind==='textarea')input=`<textarea class="field-control" id="${id}" name="${q.id}" rows="3" placeholder="${escapeHTML(q.placeholder||'')}" ${q.required?'required':''}>${escapeHTML(value)}</textarea>`;
-  else if(q.kind==='select')input=`<select class="field-control" id="${id}" name="${q.id}" ${q.required?'required':''}><option value="">Seleccionar una opción</option>${q.options.map(opt=>`<option value="${escapeHTML(opt)}" ${value===opt?'selected':''}>${escapeHTML(opt)}</option>`).join('')}</select>`;
+  else if(q.kind==='select')input=`<select class="field-control" id="${id}" name="${q.id}" ${q.required?'required':''}><option value="">Seleccionar una opción</option>${(typeof q.options==='function'?q.options():q.options).map(opt=>`<option value="${escapeHTML(opt)}" ${value===opt?'selected':''}>${escapeHTML(opt)}</option>`).join('')}</select>`;
   else if(q.kind==='checkbox'||q.kind==='radio') {
     const values = q.kind==='checkbox' ? checkedValues(q.id) : [value];
     input=`${q.hint?`<p class="group-hint">${escapeHTML(q.hint)}</p>`:''}<div class="option-group">${q.options.map((option,i)=>`<label class="option-chip"><input name="${q.id}" type="${q.kind==='radio'?'radio':'checkbox'}" value="${escapeHTML(option)}" ${values.includes(option)?'checked':''} ${q.required&&i===0?'data-required="true"':''}><span>${escapeHTML(option)}</span></label>`).join('')}</div>`;
@@ -125,8 +128,17 @@ function attachListeners(){
   els.content.querySelectorAll('input,select,textarea').forEach(input=>{
     const type=input.type;
     input.addEventListener(type==='checkbox'||type==='radio'||type==='select-one'?'change':'input',()=>{
+      const question=steps[stepIndex].questions.find(q=>q.id===input.name);
+      if(question?.kind==='checkbox' && question.maxSelections && input.checked){
+        const checked=els.content.querySelectorAll(`input[name="${question.id}"]:checked`);
+        if(checked.length>question.maxSelections){
+          input.checked=false;
+          notify(`Podés elegir hasta ${question.maxSelections} objetivos. Para cambiar uno, desmarcá otro primero.`);
+          return;
+        }
+      }
       updateAnswersFromVisible();hideError();
-      if(input.name==='ad_history')render();
+      if(input.name==='ad_history'||input.name==='primary_goal')render();
     });
   });
 }
@@ -290,7 +302,12 @@ async function sendBrief(){
     brand:answers.brand||'',contact_name:answers.contact_name||'',
     contact_email:answers.contact_email||'',
     contact_whatsapp:answers.contact_whatsapp||'',
-    primary_goal:answers.primary_goal||'',
+    primary_goal:(()=>{
+      const goals=checkedValues('primary_goal');
+      if(goals.length===1)return goals[0];
+      const priority=goals.includes(answers.goal_priority)?answers.goal_priority:goals[0]||'';
+      return priority ? 'Principal: '+priority+' | Secundario: '+goals.filter(g=>g!==priority).join(', ') : '';
+    })(),
     channels:Array.isArray(answers.channels)?answers.channels.join(', '):'',
     monthly_budget:answers.monthly_budget||'',
     report:reportText(),answers:normalizedAnswers()
