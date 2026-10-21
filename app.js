@@ -138,6 +138,7 @@ function attachListeners(){
         }
       }
       updateAnswersFromVisible();hideError();
+      if(input.name==='primary_goal'&&!checkedValues('primary_goal').includes(answers.goal_priority))answers.goal_priority='';
       if(input.name==='ad_history'||input.name==='primary_goal')render();
     });
   });
