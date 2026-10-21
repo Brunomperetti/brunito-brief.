@@ -20,8 +20,8 @@ const steps = [
     {id:'brand',label:'¿Cómo se llama tu negocio o marca?',kind:'text',required:true,placeholder:'Nombre comercial'},
     {id:'business_type',label:'¿Cómo vendés principalmente?',kind:'select',required:true,options:['Servicios / profesionales','Comercio o local físico','Tienda online / e-commerce','Negocio B2B / mayorista','Negocio mixto','Otro']},
     {id:'business_description',label:'¿Qué productos o servicios ofrecés?',kind:'textarea',required:true,wide:true,placeholder:'Contanos brevemente a qué se dedica tu negocio. Sin lenguaje técnico.'},
-    {id:'contact_name',label:'¿Con quién coordinamos la campaña?',kind:'text',required:true,placeholder:'Nombre y apellido'},
-    {id:'contact_email',label:'Correo electrónico de contacto',kind:'email',required:true,placeholder:'nombre@empresa.com'},
+    {id:'contact_name',label:'¿Cómo te llamás?',kind:'text',required:true,placeholder:'Tu nombre y apellido',hint:'Así sabemos quién completó el brief.'},
+    {id:'contact_email',label:'¿A qué correo electrónico podemos escribirte?',kind:'email',required:true,placeholder:'tuemail@ejemplo.com',hint:'Lo usamos para contactarte sobre la estrategia de tu negocio.'},
     {id:'contact_whatsapp',label:'WhatsApp de contacto',kind:'tel',placeholder:'Ej.: +54 9 351...'},
     {id:'online_presence',label:'Web, tienda online y/o redes sociales',kind:'text',wide:true,placeholder:'Enlaces de tu sitio web, Instagram o redes principales',hint:'Podés incluir varios enlaces separados por comas.'}
   ]},
