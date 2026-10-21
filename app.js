@@ -1,10 +1,11 @@
 /*
-  BRUNITO · Brief estratégico de campañas (sin frameworks, listo para GitHub Pages)
-  Para recibir briefs por email, pegá tu URL de Formspree en FORM_ENDPOINT.
-  Ejemplo: https://formspree.io/f/abcdefgh
-  Con la cadena vacía, el brief funciona pero SOLO exporta respuestas localmente.
+  BRUNITO · Brief estratégico de campañas (sin frameworks, listo para GitHub Pages).
+  Envío mediante formulario HTML POST a Google Apps Script:
+  cada envío se guarda en Google Sheets y dispara una notificación por correo.
+  La confirmación final la presenta el receptor después de procesar los datos.
 */
-const FORM_ENDPOINT = '';
+const FORM_ENDPOINT = 'https://script.google.com/macros/s/AKfycbx0XbkO8m0KlTsXM5ztDvkN2dgmIBo3Xetw5wTHH2LgkwTJH0ll3KuezNTYX3pruKhv/exec';
+const SUBMISSION_KEY = 'brunito_ads_brief_submission_v1';
 const STORAGE_KEY = 'brunito_ads_brief_v2';
 const EMPTY_LABEL = 'No informado';
 
@@ -199,7 +200,7 @@ function renderReview(){
   els.next.classList.toggle('hidden',!FORM_ENDPOINT);
   els.next.innerHTML='Enviar brief <span aria-hidden="true">→</span>';
   els.content.innerHTML=`<div class="step-kicker">BR / 07 — REVISAR</div><h2 class="step-title">Todo listo para revisar.</h2><p class="step-description">Estas son tus respuestas. Podés volver a cualquier sección y corregir lo que necesites.</p>
-    <p class="review-intro">${FORM_ENDPOINT?'Al enviarlo, el brief se compartirá con brunito a través del servicio de formularios configurado.':'La recepción automática todavía no está configurada. Descargá las respuestas o guardalas en PDF para compartirlas con brunito.'}</p>
+    <p class="review-intro">${FORM_ENDPOINT?'Al enviarlo, las respuestas se guardarán en Google Sheets y se notificará a brunito por correo. Verás una confirmación cuando el receptor termine de procesarlas.':'La recepción automática todavía no está configurada. Descargá las respuestas o guardalas en PDF para compartirlas con brunito.'}</p>
     <div id="review-sections">${allActive().map((s,index)=>`<section class="review-section"><div class="review-header"><h3>${String(index+1).padStart(2,'0')} / ${escapeHTML(s.nav)}</h3><button class="edit-link" data-edit="${index}" type="button">Editar ↗</button></div><dl class="review-list">${s.questions.filter(q=>populated(answers[q.id])).map(q=>`<div class="review-item"><dt>${escapeHTML(q.label)}</dt><dd>${escapeHTML(answerText(answers[q.id]))}</dd></div>`).join('')||'<div class="review-item"><dd>No hay respuestas en esta sección.</dd></div>'}</dl></section>`).join('')}</div>
     ${FORM_ENDPOINT?'<div class="privacy-row"><label><input id="send-ok" type="checkbox"><span>Confirmo que la información es correcta y autorizo a brunito a contactarme para preparar la propuesta publicitaria.</span></label></div>':''}
     <div class="summary-actions"><button class="btn btn-outline" id="download-txt" type="button">↓ Descargar respuestas</button><button class="btn btn-outline" id="print-pdf" type="button">↗ Guardar como PDF</button><button class="btn btn-subtle" id="copy-txt" type="button">Copiar texto</button><button class="btn btn-subtle" id="download-json" type="button">↓ JSON</button></div>
@@ -215,19 +216,62 @@ function scrollToBrief(){
   const top=node.getBoundingClientRect().top+window.scrollY-15;
   window.scrollTo({top,behavior:'smooth'});
 }
-async function sendBrief(){
-  if(!FORM_ENDPOINT)return;
-  if(!document.getElementById('send-ok')?.checked){els.error.textContent='Confirmá que la información es correcta para enviarla.';els.error.classList.remove('hidden');return;}
-  els.next.disabled=true;els.next.textContent='Enviando…';
+function getSubmissionId(){
+  // Una misma respuesta conserva su ID para evitar duplicados si se reintenta el envío.
   try{
-    const payload={_subject:`Nuevo brief de campañas · ${answers.brand||'Cliente'}`,...normalizedAnswers()};
-    const res=await fetch(FORM_ENDPOINT,{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(!res.ok)throw Error('El servidor rechazó el envío.');
-    localStorage.removeItem(STORAGE_KEY);delivered=true;
-    els.content.innerHTML='<div class="success-state"><div class="success-icon" aria-hidden="true">✓</div><div class="step-kicker">BR / ENVÍO CORRECTO</div><h2>¡Gracias!<br>Ahora empieza la estrategia.</h2><p>Tu brief se envió correctamente. brunito revisará la información para definir el enfoque de las campañas.</p></div>';
-    els.actions.classList.add('hidden');els.footnote.classList.add('hidden');hideError();
-  }catch(_e){els.error.textContent='No pudimos confirmar el envío. Descargá una copia de tus respuestas y volvé a intentar.';els.error.classList.remove('hidden');}
-  finally{els.next.disabled=false;els.next.textContent='Enviar brief →';}
+    const existing=localStorage.getItem(SUBMISSION_KEY);
+    if(existing)return existing;
+  }catch(_e){}
+  const newId=(window.crypto && typeof window.crypto.randomUUID==='function')
+    ? window.crypto.randomUUID()
+    : 'br-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+  try{localStorage.setItem(SUBMISSION_KEY,newId)}catch(_e){}
+  return newId;
+}
+function sendBrief(){
+  if(!FORM_ENDPOINT)return;
+  if(!document.getElementById('send-ok')?.checked){
+    els.error.textContent='Confirmá que la información es correcta para enviarla.';
+    els.error.classList.remove('hidden');
+    return;
+  }
+  // Google Apps Script redirige su respuesta a otra URL; fetch() no permite
+  // confirmar el resultado con seguridad por las restricciones CORS. Un POST
+  // de formulario nativo permite que el servidor muestre su confirmación real.
+  const payload={
+    source:'brunito-brief',
+    submission_id:getSubmissionId(),
+    website:'', // Campo trampa del receptor (honeypot).
+    consent:true,
+    brand:answers.brand||'',
+    contact_name:answers.contact_name||'',
+    contact_email:answers.contact_email||'',
+    contact_whatsapp:answers.contact_whatsapp||'',
+    primary_goal:answers.primary_goal||'',
+    channels:Array.isArray(answers.channels)?answers.channels.join(', '):'',
+    monthly_budget:answers.monthly_budget||'',
+    report:reportText(),
+    answers:normalizedAnswers()
+  };
+  const form=document.createElement('form');
+  form.method='POST';
+  form.action=FORM_ENDPOINT;
+  form.acceptCharset='UTF-8';
+  form.style.display='none';
+  const input=document.createElement('input');
+  input.type='hidden';
+  input.name='payload';
+  input.value=JSON.stringify(payload);
+  form.appendChild(input);
+  document.body.appendChild(form);
+  els.next.disabled=true;
+  els.next.textContent='Enviando…';
+  hideError();
+  // No se elimina el borrador hasta que el usuario reciba confirmación;
+  // en caso de error puede volver al formulario y reintentar.
+  form.submit();
+  // Si el navegador no logra salir de la página, se habilita el reintento.
+  setTimeout(()=>{els.next.disabled=false;els.next.textContent='Enviar brief →';form.remove();},12000);
 }
 els.prev.addEventListener('click',()=>{if(delivered)return;updateAnswersFromVisible();if(stepIndex>0){stepIndex--;render();scrollToBrief()}});
 els.next.addEventListener('click',()=>{
