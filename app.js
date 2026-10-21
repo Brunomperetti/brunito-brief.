@@ -21,7 +21,7 @@ const steps = [
     {id:'business_type',label:'¿Cómo vendés principalmente?',kind:'select',required:true,options:['Servicios / profesionales','Comercio o local físico','Tienda online / e-commerce','Negocio B2B / mayorista','Negocio mixto','Otro']},
     {id:'business_description',label:'¿Qué productos o servicios ofrecés?',kind:'textarea',required:true,wide:true,placeholder:'Contanos brevemente a qué se dedica tu negocio. Sin lenguaje técnico.'},
     {id:'contact_name',label:'¿Cómo te llamás?',kind:'text',required:true,placeholder:'Tu nombre y apellido',hint:'Así sabemos quién completó el brief.'},
-    {id:'contact_email',label:'¿A qué correo electrónico podemos escribirte?',kind:'email',required:true,placeholder:'tuemail@ejemplo.com',hint:'Lo usamos para contactarte sobre la estrategia de tu negocio.'},
+    {id:'contact_email',label:'¿Cuál es tu correo electrónico?',kind:'email',required:true,placeholder:'tuemail@ejemplo.com',hint:'Para poder contactarte si necesito aclarar algo de tu brief.'},
     {id:'contact_whatsapp',label:'WhatsApp de contacto',kind:'tel',placeholder:'Ej.: +54 9 351...'},
     {id:'online_presence',label:'Web, tienda online y/o redes sociales',kind:'text',wide:true,placeholder:'Enlaces de tu sitio web, Instagram o redes principales',hint:'Podés incluir varios enlaces separados por comas.'}
   ]},
@@ -266,7 +266,7 @@ function showConfirmed(status){
     '<h2>¡Brief recibido!</h2>'+
     '<p>Tus respuestas quedaron guardadas correctamente. '+
     (emailOk?'brunito recibió también la notificación por correo. ':'El aviso por correo quedó pendiente, pero tus respuestas ya están registradas. ')+
-    'Ahora revisaremos la información para preparar la estrategia de tus campañas.</p>'+
+    'Ahora revisaré la información para preparar la estrategia de tus campañas.</p>'+
     '<p><strong>Gracias por confiar en nosotros.</strong></p>'+
     '<p class="summary-disclosure">brunito. — Publicidad, estrategia y datos.</p></div>';
   els.actions.classList.add('hidden');
