@@ -217,15 +217,15 @@ function scrollToBrief(){
   window.scrollTo({top,behavior:'smooth'});
 }
 function getSubmissionId(){
-  // Una misma respuesta conserva su ID para evitar duplicados si se reintenta el envío.
-  try{
-    const existing=localStorage.getItem(SUBMISSION_KEY);
-    if(existing)return existing;
-  }catch(_e){}
+  // El ID se conserva al reintentar las mismas respuestas, no para briefs nuevos.
+  const fingerprint=JSON.stringify(answers);
+  let previous={};
+  try{previous=JSON.parse(sessionStorage.getItem(SUBMISSION_KEY)||'{}')}catch(_e){}
+  if(previous.fingerprint===fingerprint && previous.id)return previous.id;
   const newId=(window.crypto && typeof window.crypto.randomUUID==='function')
     ? window.crypto.randomUUID()
     : 'br-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
-  try{localStorage.setItem(SUBMISSION_KEY,newId)}catch(_e){}
+  try{sessionStorage.setItem(SUBMISSION_KEY,JSON.stringify({fingerprint,id:newId}))}catch(_e){}
   return newId;
 }
 function sendBrief(){
