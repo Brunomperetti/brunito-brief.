@@ -12,7 +12,7 @@ Sitio web estático responsive listo para **GitHub Pages**. No requiere Streamli
 - Secciones y campos opcionales para evitar cansar al cliente. Nunca pide contraseñas.
 - Validación de campos obligatorios, progreso, guardado automático del borrador en `localStorage` del dispositivo.
 - Revisión final y exportación a TXT / JSON; impresión o Guardar como PDF desde el navegador.
-- Envío online opcional mediante un servicio de formularios externo (por ejemplo Formspree).
+- Envío online mediante **Google Apps Script**: guarda cada brief en Sheets y envía una notificación a `brunitomkt@gmail.com`.
 
 ## Publicar gratis con GitHub Pages
 
@@ -24,25 +24,24 @@ Sitio web estático responsive listo para **GitHub Pages**. No requiere Streamli
 
 El repositorio debe ser **público** para usar GitHub Pages en una cuenta gratuita estándar. No subas datos reales de clientes ni claves privadas al repositorio.
 
-## Activar recepción automática de respuestas
+## Recepción automática: Google Sheets y correo
 
-**Importante:** GitHub Pages sirve el formulario, pero por sí solo no guarda ni entrega las respuestas.
+La web de GitHub Pages envía el brief mediante un **POST HTML estándar** a Google Apps Script, sin depender de CORS de `fetch()`. Una aplicación web de Apps Script asociada a una hoja de cálculo recibe los datos, los registra y avisa por email. La pantalla final de confirmación la muestra Apps Script, **no el frontend**.
 
-Para recibir briefs en tu correo, creá un formulario en un proveedor como Formspree y obtené el endpoint (ejemplo: `https://formspree.io/f/abcdefgh`). Luego abrí `app.js` y reemplazá:
+- Planilla: **BRUNITO | Briefs de campañas**, pestaña **Briefs recibidos**.
+- Correo de aviso: **brunitomkt@gmail.com**.
+- `app.js` contiene la URL pública de la implementación de Apps Script (`FORM_ENDPOINT`).
+- El frontend manda un campo `payload` con JSON: `source`, `submission_id`, `consent`, datos del cliente, `report`, `answers` y `website` (campo trampa vacío).
+- El script registra la fila antes de intentar el correo, y marca el aviso como `ENVIADO` o `PENDIENTE`.
+- Los identificadores de envío reducen el riesgo de duplicados por reintento.
 
-```js
-const FORM_ENDPOINT = '';
-```
+**Para comprobar la conexión:** completar el formulario público con datos de prueba, aceptar el consentimiento y presionar **Enviar brief**. Esperar el mensaje de confirmación de Google Apps Script. Verificar una fila nueva en **Briefs recibidos** y un email en la bandeja de destino (revisar Spam si hace falta). Solo después compartirlo con clientes.
 
-por:
+**Si modificás `Código.gs`:** guardá y actualizá la implementación existente desde **Implementar → Administrar implementaciones → Editar → Nueva versión**; editar el código por sí solo no actualiza la versión pública.
 
-```js
-const FORM_ENDPOINT = 'https://formspree.io/f/TU_IDENTIFICADOR';
-```
+### Seguridad
 
-Subí ese cambio al repositorio y probá un envío completo. El endpoint es una URL pública de recepción; **nunca coloques claves secretas** en archivos visibles del sitio. Revisá los límites, términos y política de privacidad del proveedor elegido.
-
-Mientras `FORM_ENDPOINT` esté vacío, la web deja explícito que **NO envía los datos** y permite compartir respuestas por archivo TXT, PDF o JSON. No se declara ningún envío exitoso en modo offline.
+No solicitar ni compartir contraseñas o secretos. El endpoint público admite solicitudes anónimas, por lo que puede recibir intentos de spam; para volumen de producción conviene agregar rate limiting, verificación antispam y políticas de retención. Google Sheets y Gmail operan bajo la autorización de la cuenta que implementó el script. La confirmación del envío no implica que las campañas ya estén configuradas.
 
 ## Probar localmente
 
@@ -66,4 +65,4 @@ Las preguntas están agrupadas en el array `steps` dentro de `app.js`, con opcio
 
 ### Confidencialidad y seguridad
 
-El borrador se guarda **solo en el navegador/dispositivo** mediante localStorage hasta su envío confirmado; no funciona como almacenamiento central ni copia de seguridad. Evitá completar datos confidenciales en dispositivos compartidos. Si un cliente desea borrar su borrador, puede borrar los datos locales del sitio en el navegador. El envio usa HTTPS únicamente si se configura un endpoint HTTPS. Los accesos Meta / Google se conceden mediante permisos, **sin compartir contraseñas**.
+El borrador se guarda **en el navegador/dispositivo** mediante localStorage y se conserva para recuperarlo si el envío falla; no funciona como almacenamiento central ni copia de seguridad. Evitá completar datos confidenciales en dispositivos compartidos. Si un cliente desea borrar su borrador, puede borrar los datos locales del sitio en el navegador. El envio usa HTTPS únicamente si se configura un endpoint HTTPS. Los accesos Meta / Google se conceden mediante permisos, **sin compartir contraseñas**.
