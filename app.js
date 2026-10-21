@@ -228,51 +228,100 @@ function getSubmissionId(){
   try{sessionStorage.setItem(SUBMISSION_KEY,JSON.stringify({fingerprint,id:newId}))}catch(_e){}
   return newId;
 }
-function sendBrief(){
+
+function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+function checkSavedBrief(id){
+  // Apps Script usa ContentService (JavaScript), por lo tanto no hay
+  // restricciones CORS de fetch. El mensaje solo confirma un ID aleatorio,
+  // nunca devuelve datos personales.
+  return new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    let done=false;
+    const finish=(value,error)=>{
+      if(done)return;
+      done=true;
+      clearTimeout(timer);
+      if(window.brunitoStatusCallback===callback)delete window.brunitoStatusCallback;
+      script.remove();
+      if(error)reject(error);else resolve(value);
+    };
+    const callback=(result)=>{
+      if(!result || result.id!==id)return;
+      finish(result,null);
+    };
+    const timer=setTimeout(()=>finish(null,new Error('Tiempo agotado comprobando el envío')),9500);
+    window.brunitoStatusCallback=callback;
+    script.onerror=()=>finish(null,new Error('No se pudo comprobar el estado del envío'));
+    script.src=FORM_ENDPOINT+'?status='+encodeURIComponent(id)+'&t='+Date.now();
+    document.head.appendChild(script);
+  });
+}
+function showConfirmed(status){
+  localStorage.removeItem(STORAGE_KEY);
+  try{sessionStorage.removeItem(SUBMISSION_KEY)}catch(_e){}
+  delivered=true;
+  const emailOk=status.correo==='ENVIADO';
+  els.content.innerHTML='<div class="success-state"><div class="success-icon" aria-hidden="true">✓</div>'+
+    '<div class="step-kicker">BR / CONFIRMACIÓN</div>'+
+    '<h2>¡Brief recibido!</h2>'+
+    '<p>Tus respuestas quedaron guardadas correctamente. '+
+    (emailOk?'brunito recibió también la notificación por correo. ':'El aviso por correo quedó pendiente, pero tus respuestas ya están registradas. ')+
+    'Ahora revisaremos la información para preparar la estrategia de tus campañas.</p>'+
+    '<p><strong>Gracias por confiar en nosotros.</strong></p>'+
+    '<p class="summary-disclosure">brunito. — Publicidad, estrategia y datos.</p></div>';
+  els.actions.classList.add('hidden');
+  els.footnote.classList.add('hidden');
+  hideError();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+async function sendBrief(){
   if(!FORM_ENDPOINT)return;
   if(!document.getElementById('send-ok')?.checked){
     els.error.textContent='Confirmá que la información es correcta para enviarla.';
     els.error.classList.remove('hidden');
     return;
   }
-  // Google Apps Script redirige su respuesta a otra URL; fetch() no permite
-  // confirmar el resultado con seguridad por las restricciones CORS. Un POST
-  // de formulario nativo permite que el servidor muestre su confirmación real.
+  els.next.disabled=true;
+  els.next.textContent='Enviando y verificando…';
+  hideError();
+  const id=getSubmissionId();
   const payload={
-    source:'brunito-brief',
-    submission_id:getSubmissionId(),
-    website:'', // Campo trampa del receptor (honeypot).
-    consent:true,
-    brand:answers.brand||'',
-    contact_name:answers.contact_name||'',
+    source:'brunito-brief',submission_id:id,website:'',consent:true,
+    brand:answers.brand||'',contact_name:answers.contact_name||'',
     contact_email:answers.contact_email||'',
     contact_whatsapp:answers.contact_whatsapp||'',
     primary_goal:answers.primary_goal||'',
     channels:Array.isArray(answers.channels)?answers.channels.join(', '):'',
     monthly_budget:answers.monthly_budget||'',
-    report:reportText(),
-    answers:normalizedAnswers()
+    report:reportText(),answers:normalizedAnswers()
   };
-  const form=document.createElement('form');
-  form.method='POST';
-  form.action=FORM_ENDPOINT;
-  form.acceptCharset='UTF-8';
-  form.style.display='none';
-  const input=document.createElement('input');
-  input.type='hidden';
-  input.name='payload';
-  input.value=JSON.stringify(payload);
-  form.appendChild(input);
-  document.body.appendChild(form);
-  els.next.disabled=true;
-  els.next.textContent='Enviando…';
-  hideError();
-  // No se elimina el borrador hasta que el usuario reciba confirmación;
-  // en caso de error puede volver al formulario y reintentar.
-  form.submit();
-  // Si el navegador no logra salir de la página, se habilita el reintento.
-  setTimeout(()=>{els.next.disabled=false;els.next.textContent='Enviar brief →';form.remove();},12000);
+  try{
+    // POST URL encoded simple y opaco: NO se considera confirmación exitosa.
+    // Solo el control posterior contra Sheets habilita la pantalla de éxito.
+    await fetch(FORM_ENDPOINT,{
+      method:'POST',mode:'no-cors',credentials:'omit',redirect:'follow',
+      body:new URLSearchParams({payload:JSON.stringify(payload)})
+    });
+    let status=null;
+    for(let tries=0;tries<12;tries++){
+      try{
+        const reply=await checkSavedBrief(id);
+        if(reply.guardado){status=reply;break;}
+      }catch(_e){/* La consulta puede reintentarse sin repetir el POST. */}
+      await wait(Math.min(1400+tries*650,4500));
+    }
+    if(!status)throw new Error('No se confirmó el registro');
+    showConfirmed(status);
+  }catch(error){
+    console.error('BRUNITO: envío sin confirmación',error);
+    els.error.textContent='No pudimos confirmar el envío. Conservamos tus respuestas. Revisá con brunito si se registraron antes de reintentar.';
+    els.error.classList.remove('hidden');
+  }finally{
+    els.next.disabled=false;
+    els.next.textContent='Enviar brief →';
+  }
 }
+
 els.prev.addEventListener('click',()=>{if(delivered)return;updateAnswersFromVisible();if(stepIndex>0){stepIndex--;render();scrollToBrief()}});
 els.next.addEventListener('click',()=>{
   if(delivered)return;
